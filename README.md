@@ -2,6 +2,8 @@
 
 An **agentic wallet** that an AI can operate on your behalf. This repo contains the wallet implementation, the integration standard, and a working CLI demo on Solana Devnet.
 
+![Sentrii Agentic Wallet CLI](image.png)
+
 ---
 
 ## The Wallet in This Repo
