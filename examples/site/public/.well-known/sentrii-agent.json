@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "name": "Sample DeFi Site",
+  "baseUrl": "http://localhost:3000",
+  "workflows": [
+    {
+      "id": "swap",
+      "description": "Swap tokens on the sample DeFi site",
+      "inputs": [
+        {
+          "name": "amount",
+          "description": "Amount to swap",
+          "required": true
+        }
+      ],
+      "labels": ["swap", "trade", "exchange"],
+      "verificationCues": ["Swap Successful"],
+      "confirmationRequired": true
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@sentrii/sentrii-standard",
+  "version": "1.0.0",
+  "description": "Sentrii Standard v1 types, schema, and validator for the manifest-based integration format.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "license": "MPL-2.0"
+}

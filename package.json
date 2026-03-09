@@ -1,0 +1,16 @@
+{
+  "name": "sentrii-oss",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sentrii public integration repo for standardized agent communication.",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "yarn workspaces run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

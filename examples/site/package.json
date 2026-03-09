@@ -1,0 +1,12 @@
+{
+  "name": "sentrii-example-site",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "serve public",
+    "build": "echo 'No build needed'"
+  },
+  "devDependencies": {
+    "serve": "^14.2.1"
+  }
+}

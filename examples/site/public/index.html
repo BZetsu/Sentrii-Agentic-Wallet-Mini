@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sample DeFi Site</title>
+    <style>
+        body { font-family: sans-serif; padding: 2rem; }
+        .card { border: 1px solid #ccc; padding: 1rem; border-radius: 8px; max-width: 400px; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <h1>Sample DeFi Site</h1>
+    <p>This is a minimal example of a site that implements the Sentrii standard.</p>
+    
+    <div class="card">
+        <h2>Swap Tokens</h2>
+        <input type="number" placeholder="0.0" id="amount" />
+        <button id="swap-btn">Swap</button>
+        <p id="status" style="color: green; display: none;">Swap Successful</p>
+    </div>
+
+    <script>
+        document.getElementById('swap-btn').addEventListener('click', () => {
+            const status = document.getElementById('status');
+            status.style.display = 'block';
+            setTimeout(() => { status.style.display = 'none'; }, 3000);
+        });
+    </script>
+</body>
+</html>
