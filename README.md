@@ -54,6 +54,15 @@ In the full product, longer‑running strategies (e.g. “trade until 2x”, “
 
 The agent proposes. Policy decides. The vault signs. The agent never touches raw keys.
 
+### Key Management (Production Overview)
+
+The production wallet extension uses a dedicated Rust/WASM vault to manage keys:
+
+- **Key storage:** Private keys and mnemonics are generated/imported **inside WASM**, encrypted with AES‑256‑GCM using a PBKDF2‑HMAC‑SHA256–derived key, and stored only as encrypted blobs.
+- **Secrets boundary:** Plaintext keys and unlock secrets **never enter JavaScript**; JS only sees encrypted blobs and public keys.
+- **Unlock/lock model:** While unlocked, decrypted key material lives only in WASM memory and is wiped on lock via zeroization.
+- **Signing:** Transaction bytes are passed into the vault; decrypt+sign happen entirely in Rust/WASM, and only signatures/signed transactions come back out. All transaction policy (sim, heuristics, verdicts, limits) is enforced **before** calling the signer.
+
 ---
 
 ## Agentic Wallet Architecture
