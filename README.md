@@ -48,9 +48,11 @@ The wallet follows a strict separation:
 
 1. **Brain** — The AI parses your intent and outputs a tool call (`transfer_sol` or `interact_with_spl_protocol`). It never sees private keys.
 2. **Vault** — The `Keypair` holds the keys. In this CLI demo, the keypair lives in memory for the session. In production (e.g. the Sentrii extension), keys live in a Rust/WASM vault, encrypted.
-3. **Policy** — In the CLI, every tool invocation is executed (it's a devnet demo). In production, a policy engine would gate auto-approval (e.g. max amount, verdict checks).
+3. **Policy (off-chain)** — In this Devnet CLI, every valid tool invocation is executed (it is intentionally minimal). In production, an **Agent Policy layer** in the extension decides what the vault is allowed to sign (per‑wallet limits, verdict checks, per‑site rules) before any transaction bytes are built or sent for signing.
 
-The agent proposes. The policy decides. The vault signs. The agent never touches raw keys.
+In the full product, longer‑running strategies (e.g. “trade until 2x”, “claim when rewards appear”) are orchestrated by a **Temporal‑based control plane** (`sentrii-agent-control`) that owns workflow state, retries, pause/resume, and recovery. The extension still keeps the final policy and signing gates, and the server/control‑plane never receives private keys or bypasses local approval.
+
+The agent proposes. Policy decides. The vault signs. The agent never touches raw keys.
 
 ---
 
@@ -145,7 +147,7 @@ The CLI validates this structure before running. The full Sentrii extension uses
 | `examples/cli` | The agentic wallet — Keypair creation, funding, AI intent parsing, tool execution on Devnet |
 | `examples/site` | Minimal HTML site with a valid manifest. Template for dApp integration. |
 | `packages/sentrii-standard` | Zod schema and `validateManifest()` for `/.well-known/sentrii-agent.json` |
-| `packages/agent-protocol` | TypeScript types for agent tasks, strategies, and control-plane contracts (used by the full Sentrii extension) |
+| `packages/agent-protocol` | TypeScript types for agent tasks, strategies, and control-plane contracts (used by the full Sentrii extension and its Temporal workflows) |
 
 ---
 

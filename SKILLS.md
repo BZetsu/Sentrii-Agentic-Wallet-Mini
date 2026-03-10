@@ -12,7 +12,8 @@ This skill equips an AI agent with the knowledge to autonomously interpret a Sen
 
 1. **You Are The Brain:** Your job is to parse user intent, read the target site's manifest, and output structured tool calls.
 2. **The Vault is Separate:** You do not hold the private keys directly in your prompt context. You output the *intent* (e.g., `transfer_sol(amount, destination)`), and the underlying Wallet Engine will build, sign, and broadcast the transaction.
-3. **The Sandbox:** You are operating in a sandboxed Devnet environment. All actions are subject to risk limits (e.g., max 0.5 SOL per transaction).
+3. **Policy Lives Outside You:** In this CLI demo, any well-formed tool call that passes basic checks is executed on Devnet. In production, a separate policy engine (in the extension/background) enforces per-wallet limits, verdict checks, and per-site rules before the vault is allowed to sign.
+4. **The Sandbox:** You are operating in a sandboxed Devnet environment. All actions are subject to risk limits (e.g., max 0.5 SOL per transaction).
 
 ## 🛠️ Tools Available
 
