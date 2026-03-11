@@ -1,4 +1,4 @@
-import { Keypair, Connection, LAMPORTS_PER_SOL, SystemProgram, Transaction, VersionedTransaction, sendAndConfirmTransaction, PublicKey } from '@solana/web3.js';
+import { Keypair, Connection, LAMPORTS_PER_SOL, SystemProgram, Transaction, VersionedTransaction, type SendOptions, sendAndConfirmTransaction, PublicKey } from '@solana/web3.js';
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo } from '@solana/spl-token';
 import { validateManifest } from '@sentrii/sentrii-standard';
 import { SolanaAgentKit, getMintInfo, type BaseWallet } from 'solana-agent-kit';
@@ -293,20 +293,24 @@ async function main() {
               }
               return signed;
             },
-            async signAndSendTransaction<T extends Transaction | VersionedTransaction>(transaction: T): Promise<string> {
+            async signAndSendTransaction<T extends Transaction | VersionedTransaction>(
+              transaction: T,
+              _options?: SendOptions,
+            ): Promise<{ signature: string }> {
               const signed = await this.signTransaction(transaction);
               const raw =
                 signed instanceof VersionedTransaction
                   ? signed.serialize()
                   : (signed as Transaction).serialize();
-              return connection.sendRawTransaction(raw);
+              const signature = await connection.sendRawTransaction(raw);
+              return { signature };
             },
             async signMessage(): Promise<never> {
               throw new Error('CLI demo does not support arbitrary message signing.');
             }
           };
 
-          const kit = new SolanaAgentKit(signingWallet, rpcUrl);
+          const kit = new SolanaAgentKit(signingWallet, rpcUrl, { signOnly: false });
           kit.use(TokenPlugin);
 
           const fromMintInfo = await getMintInfo(kit.connection, fromMintPk.toBase58());
@@ -335,7 +339,8 @@ async function main() {
           let txSignature: string | null = null;
           if (tradeResult instanceof VersionedTransaction || tradeResult instanceof Transaction) {
             console.log('💸 Broadcasting swap transaction to Devnet via Solana Agent Kit wallet adapter...');
-            txSignature = await signingWallet.signAndSendTransaction(tradeResult);
+            const { signature } = await signingWallet.signAndSendTransaction(tradeResult);
+            txSignature = signature;
           } else if (typeof tradeResult === 'string') {
             console.log('✅ Kit returned a transaction id/string result:');
             console.log(tradeResult);
