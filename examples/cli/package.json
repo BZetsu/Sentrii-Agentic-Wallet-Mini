@@ -7,6 +7,8 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@solana-agent-kit/plugin-token": "^2.0.9",
+    "solana-agent-kit": "^2.0.10",
     "@solana/web3.js": "^1.89.0",
     "@sentrii/sentrii-standard": "*",
     "@sentrii/agent-protocol": "*",

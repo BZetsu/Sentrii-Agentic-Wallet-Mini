@@ -24,6 +24,7 @@ No human approval in the loop. The agent wallet signs. You get a Solscan link.
 |------|--------------|
 | `transfer_sol` | Sends SOL to a destination address. AI extracts amount and address from your prompt. |
 | `interact_with_spl_protocol` | Creates a new SPL Token mint, an Associated Token Account, and mints tokens into the agent wallet. Proves the wallet can hold SPL tokens and interact with on-chain protocols. |
+| `swap_with_kit` | Uses **Solana Agent Kit** to construct, sign, and send a Jupiter swap transaction on **Solana Devnet**, using the in-memory agent wallet for full auto-execution. |
 
 The AI (OpenAI `gpt-4o-mini`) receives your prompt plus the wallet address and balance. It maps your intent to one of these tools and returns structured parameters. The CLI executes the tool and signs with the agent `Keypair`.
 
@@ -39,6 +40,41 @@ pnpm start
 You'll see the agent wallet pubkey, the funding step, manifest validation, then a prompt. Try:
 - "Send 0.1 SOL to &lt;some-address&gt;"
 - "Interact with the SPL Token protocol to mint 100 test tokens"
+- "Ask the agent to swap from SOL into USDC on Devnet using `swap_with_kit` (the kit builds the Jupiter swap, the CLI signs and sends automatically with the agent wallet)."
+
+---
+
+## How Solana Agent Kit Is Used
+
+### In the Sentrii Extension (Wallet Repo)
+
+In the main Sentrii wallet/extension (`sentrii-wallet` repo), Solana Agent Kit is wired in as a **builder-only “kit” channel**:
+
+- The extension:
+  - Creates a **builder-only wallet adapter** (no signing/sending; only a `publicKey` and pass-through `signTransaction`).
+  - Instantiates `SolanaAgentKit` with `signOnly: true` and attaches plugins (token/DeFi/etc.).
+  - Calls kit methods (e.g. Jupiter `trade`) to get an unsigned `Transaction` / `VersionedTransaction`.
+  - Serializes that to base64 and hands it to the existing **approval + vault signing pipeline**.
+- The Rust/WASM vault remains the only signer:
+  - Threat checks, simulation, limits, and user approval run before signing.
+  - Kit never gets direct access to private keys and never sends transactions itself.
+
+This gives the extension a high-level DeFi/NFT/bridge surface while keeping Sentrii’s Brain/Vault/Policy separation intact.
+
+### In This CLI Demo (This Repo)
+
+Here in `sentrii-oss`, the CLI shows a **small, self-contained variant** of the same idea:
+
+- The CLI still spins up an in-memory Devnet `Keypair` as the agent wallet.
+- The `swap_with_kit` tool:
+  - Wraps that `Keypair` in a `BaseWallet` so `SolanaAgentKit` can **build, sign, and send** a Jupiter swap on Devnet end‑to‑end.
+  - Uses the Token plugin and the same RPC connection as the rest of the demo.
+  - Prints the swap transaction signature and a Solscan link when it completes.
+
+So:
+
+- **Extension:** kit builds transactions only; Sentrii’s vault signs after policy/approval.  
+- **CLI (this repo):** kit is allowed to both build and sign/send using the in‑memory demo key, so you can see a fully automatic swap flow on Devnet.
 
 ---
 

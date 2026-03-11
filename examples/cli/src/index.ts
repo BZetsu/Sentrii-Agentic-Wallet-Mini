@@ -1,6 +1,8 @@
-import { Keypair, Connection, LAMPORTS_PER_SOL, SystemProgram, Transaction, sendAndConfirmTransaction, PublicKey } from '@solana/web3.js';
+import { Keypair, Connection, LAMPORTS_PER_SOL, SystemProgram, Transaction, VersionedTransaction, sendAndConfirmTransaction, PublicKey } from '@solana/web3.js';
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo } from '@solana/spl-token';
 import { validateManifest } from '@sentrii/sentrii-standard';
+import { SolanaAgentKit, getMintInfo, type BaseWallet } from 'solana-agent-kit';
+import TokenPlugin from '@solana-agent-kit/plugin-token';
 import OpenAI from 'openai';
 import * as dotenv from 'dotenv';
 import * as readline from 'readline';
@@ -8,6 +10,10 @@ import * as readline from 'readline';
 dotenv.config();
 
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -25,10 +31,6 @@ async function main() {
     console.error('❌ Missing OPENAI_API_KEY in .env. Please add it to continue.');
     process.exit(1);
   }
-
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
 
   // 1. Wallet Creation
   console.log('1️⃣ Creating Agent Wallet & Destination Wallet...');
@@ -55,8 +57,8 @@ async function main() {
 
   // 3. Balance Check
   console.log('3️⃣ Checking Agent Wallet Balance...');
-  const initialBalance = await connection.getBalance(agentWallet.publicKey);
-  console.log(`💰 Balance: ${initialBalance / LAMPORTS_PER_SOL} SOL\n`);
+  const balance = await connection.getBalance(agentWallet.publicKey);
+  console.log(`💰 Balance: ${balance / LAMPORTS_PER_SOL} SOL\n`);
 
   // 4. Manifest Validation
   console.log('4️⃣ Validating Sample Sentrii Manifest...');
@@ -92,14 +94,6 @@ async function main() {
   const userPrompt = await askQuestion(`🤖 What would you like me to do?\n(Options: "Send 0.1 SOL to ${destinationWallet.publicKey.toBase58()}" OR "${defaultPrompt}")\n> `);
   const prompt = userPrompt.trim() || defaultPrompt;
 
-  await handleAILoop(agentWallet, destinationWallet, prompt, openai);
-}
-
-async function handleAILoop(agentWallet: Keypair, destinationWallet: Keypair, prompt: string, openai: OpenAI) {
-  // Always fetch the latest on-chain balance for accurate state
-  const currentBalanceLamports = await connection.getBalance(agentWallet.publicKey);
-  const currentBalanceSol = currentBalanceLamports / LAMPORTS_PER_SOL;
-
   console.log(`\n🧠 Thinking...`);
 
   const response = await openai.chat.completions.create({
@@ -107,7 +101,7 @@ async function handleAILoop(agentWallet: Keypair, destinationWallet: Keypair, pr
     messages: [
       {
         role: 'system',
-        content: `You are an AI wallet agent for Sentrii. Your current wallet address is ${agentWallet.publicKey.toBase58()} and your balance is ${currentBalanceSol} SOL. You can execute transfers or interact with the SPL Token Protocol to mint/hold tokens based on the user's request.`
+        content: `You are an AI wallet agent for Sentrii. Your current wallet address is ${agentWallet.publicKey.toBase58()} and your balance is ${balance / LAMPORTS_PER_SOL} SOL. You can execute transfers or interact with the SPL Token Protocol to mint/hold tokens based on the user's request.`
       },
       {
         role: 'user',
@@ -150,6 +144,35 @@ async function handleAILoop(agentWallet: Keypair, destinationWallet: Keypair, pr
               }
             },
             required: ['amount']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'swap_with_kit',
+          description: 'Use Solana Agent Kit to construct, sign, and send a Jupiter swap transaction on Devnet using the agent wallet.',
+          parameters: {
+            type: 'object',
+            properties: {
+              fromMint: {
+                type: 'string',
+                description: 'Input token mint address (e.g. wrapped SOL mint on devnet).'
+              },
+              toMint: {
+                type: 'string',
+                description: 'Output token mint address (e.g. devnet USDC mint).'
+              },
+              amount: {
+                type: 'number',
+                description: 'Amount of input token in the smallest unit (e.g. lamports for SOL).'
+              },
+              slippageBps: {
+                type: 'number',
+                description: 'Max slippage in basis points (defaults to 300 = 3%).'
+              }
+            },
+            required: ['fromMint', 'toMint', 'amount']
           }
         }
       }
@@ -230,6 +253,108 @@ async function handleAILoop(agentWallet: Keypair, destinationWallet: Keypair, pr
         } catch (err: any) {
           console.error(`❌ SPL Token interaction failed: ${err.message}`);
         }
+      } 
+      else if (toolCall.function.name === 'swap_with_kit') {
+        const args = JSON.parse(toolCall.function.arguments) as {
+          fromMint: string;
+          toMint: string;
+          amount: number;
+          slippageBps?: number;
+        };
+
+        console.log('🤖 AI Decision: Swapping with Solana Agent Kit on Devnet (auto sign + send)...');
+
+        try {
+          const fromMintPk = new PublicKey(args.fromMint);
+          const toMintPk = new PublicKey(args.toMint);
+
+          const rpcUrl = connection.rpcEndpoint;
+
+          const signingWallet: BaseWallet = {
+            publicKey: agentWallet.publicKey,
+            async signTransaction<T extends Transaction | VersionedTransaction>(transaction: T): Promise<T> {
+              if (transaction instanceof VersionedTransaction) {
+                transaction.sign([agentWallet]);
+                return transaction;
+              }
+              transaction.partialSign(agentWallet);
+              return transaction;
+            },
+            async signAllTransactions<T extends Transaction | VersionedTransaction>(transactions: T[]): Promise<T[]> {
+              const signed: T[] = [];
+              for (const tx of transactions) {
+                if (tx instanceof VersionedTransaction) {
+                  tx.sign([agentWallet]);
+                  signed.push(tx);
+                } else {
+                  tx.partialSign(agentWallet);
+                  signed.push(tx);
+                }
+              }
+              return signed;
+            },
+            async signAndSendTransaction<T extends Transaction | VersionedTransaction>(transaction: T): Promise<string> {
+              const signed = await this.signTransaction(transaction);
+              const raw =
+                signed instanceof VersionedTransaction
+                  ? signed.serialize()
+                  : (signed as Transaction).serialize();
+              return connection.sendRawTransaction(raw);
+            },
+            async signMessage(): Promise<never> {
+              throw new Error('CLI demo does not support arbitrary message signing.');
+            }
+          };
+
+          const kit = new SolanaAgentKit(signingWallet, rpcUrl);
+          kit.use(TokenPlugin);
+
+          const fromMintInfo = await getMintInfo(kit.connection, fromMintPk.toBase58());
+          const decimals = fromMintInfo.decimals;
+          const uiAmount = decimals > 0 ? args.amount / Math.pow(10, decimals) : args.amount;
+
+          const tradeMethod = (kit.methods as Record<string, unknown>).trade;
+          if (typeof tradeMethod !== 'function') {
+            throw new Error('Solana Agent Kit trade method is unavailable.');
+          }
+
+          const tradeResult = await (tradeMethod as (
+            kitAgent: SolanaAgentKit,
+            outputMint: PublicKey,
+            inputAmount: number,
+            inputMint: PublicKey,
+            slippageBps?: number,
+          ) => Promise<VersionedTransaction | Transaction | string | string[]>)(
+            kit,
+            toMintPk,
+            uiAmount,
+            fromMintPk,
+            args.slippageBps ?? 300,
+          );
+
+          let txSignature: string | null = null;
+          if (tradeResult instanceof VersionedTransaction || tradeResult instanceof Transaction) {
+            console.log('💸 Broadcasting swap transaction to Devnet via Solana Agent Kit wallet adapter...');
+            txSignature = await signingWallet.signAndSendTransaction(tradeResult);
+          } else if (typeof tradeResult === 'string') {
+            console.log('✅ Kit returned a transaction id/string result:');
+            console.log(tradeResult);
+            txSignature = tradeResult;
+          } else if (Array.isArray(tradeResult) && tradeResult.length > 0) {
+            console.log('✅ Kit returned an array result:');
+            console.log(tradeResult);
+            txSignature = typeof tradeResult[0] === 'string' ? tradeResult[0] : null;
+          }
+
+          if (txSignature) {
+            console.log(`✅ Swap Successful!`);
+            console.log(`🔗 View on Solscan: https://solscan.io/tx/${txSignature}?cluster=devnet\n`);
+          } else {
+            console.log('ℹ️ Swap completed via kit, but no explicit signature string was returned.');
+          }
+        } catch (err: any) {
+          console.error(`❌ Kit swap failed: ${err.message}`);
+        }
       }
     }
   } else {
@@ -237,12 +362,7 @@ async function handleAILoop(agentWallet: Keypair, destinationWallet: Keypair, pr
     console.log('⚠️ No action was taken because the AI did not invoke a tool.');
   }
 
-  const nextPrompt = await askQuestion(`\n🤖 What else would you like me to do? (Type 'exit' to quit)\n> `);
-  if (nextPrompt.toLowerCase() !== 'exit') {
-    await handleAILoop(agentWallet, destinationWallet, nextPrompt, openai);
-  } else {
-    rl.close();
-  }
+  rl.close();
 }
 
 main().catch((error) => {
